@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Transaction } from './db/schema';
 import * as A from './db/actions';
 import { seedIfEmpty } from './db/seed';
+import { initClock } from './db/meta';
 import { addMonths, currentMonth, type Month } from './lib/dates';
 import { useAppData } from './data';
 import { EntrySheet, type EntryMode } from './components/EntrySheet';
 import { Toast } from './components/ui';
 import { UpdateBar } from './components/UpdateBar';
+import { startAutoSync } from './sync/controller';
 import { Overview } from './screens/Overview';
 import { Transactions } from './screens/Transactions';
 import { Bills } from './screens/Bills';
@@ -47,12 +49,14 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      await initClock(); // Zeitstempel bleiben auch nach Uhr-Umstellungen streng steigend
       await seedIfEmpty();
       await loadPreviewData();
       await A.ensureMonth(currentMonth());
       // Speicher als „dauerhaft“ anfragen (verringert das Risiko, dass der Browser Daten löscht)
       try { await navigator.storage?.persist?.(); } catch { /* nicht unterstützt */ }
       setReady(true);
+      if (!import.meta.env.VITE_PREVIEW) startAutoSync(); // Vorschau-Datei synchronisiert nie
     })();
   }, []);
 

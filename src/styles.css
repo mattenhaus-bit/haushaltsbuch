@@ -307,3 +307,7 @@ table.matrix { border-collapse: separate; border-spacing: 0; width: max-content;
 .updatebar { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 10px); z-index: 70; background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 12px 10px 16px; display: flex; gap: 12px; align-items: center; font-weight: 600; font-size: 14px; box-shadow: 0 12px 30px -10px rgba(0,0,0,.5); }
 .updatebar button { border: 0; border-radius: 10px; padding: 9px 12px; font-weight: 700; min-height: 40px; background: #fff; color: var(--ink); }
 .updatebar button.later { background: rgba(255,255,255,.14); color: #fff; }
+
+/* Datei-Knöpfe sind <label>-Elemente: als Block-Knopf darstellen (sonst überlappen sie) */
+label.btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
+.btn.block { display: flex; align-items: center; justify-content: center; }

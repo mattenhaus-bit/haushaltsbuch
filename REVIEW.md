@@ -132,3 +132,22 @@ Die Umsetzung wurde anhand des geänderten Codes, der erweiterten Tests und eine
 Erneute Prüfergebnisse: `npm ci` erfolgreich; `npm test` mit 18/18 bestandenen Tests; `npm run build` erfolgreich einschließlich Manifest und Service Worker. `npm audit` meldet noch 4 Schwachstellen niedriger Schwere in transitiven Build-/PWA-Abhängigkeiten (`deepmerge` über Workbox/`vite-plugin-pwa`); der angebotene automatische Fix wäre ein Breaking Change. Der frühere Audit-Befund ist damit reduziert, aber abhängigkeitsseitig noch nicht vollständig beseitigt und sollte weiter über kontrollierte Upstream-Updates beobachtet werden.
 
 Prüfungen danach: `npm test` 18/18 bestanden, `npm run build` erfolgreich (Service Worker erzeugt und im Browser registriert), Browser-Test ohne Konsolenfehler, Start ohne persönliche Daten bestätigt, Import der Startdatei bestätigt.
+
+## Umsetzung Sync-Review (Phase 6, 14.11.2026, Claude)
+
+| Befund | Status | Umsetzung |
+|---|---|---|
+| Hoch – Änderungen mit gleichem Millisekunden-Zeitstempel können vom Upload übersprungen werden | ✅ behoben | `nowIso()` (src/db/meta.ts) ist jetzt streng steigend: nie zwei gleiche Zeitstempel, auch nicht bei zurückgestellter Geräteuhr (Untergrenze wird mit `initClock()` beim App-Start geladen). Zusätzlich prüft der Upload ein 10-Sekunden-Sicherheitsfenster vor dem Cursor; bereits gesendete Fassungen werden über `sync:recent` erkannt und nicht doppelt gesendet. So werden auch Änderungen erfasst, die vor dem Upload gestempelt, aber erst danach gespeichert wurden. |
+| Mittel – Geräteuhren entscheiden über Konflikte | ✅ entschärft | Hybride logische Uhr: Beim Empfang merkt sich jedes Gerät den höchsten gesehenen Zeitstempel (`sync:clock`); jede eigene spätere Änderung liegt garantiert dahinter. Eine vorgehende Uhr auf einem anderen Gerät kann damit keine Änderung mehr überstimmen, die in Kenntnis ihres Stands gemacht wurde. Nur wirklich gleichzeitige Änderungen (ohne Abgleich dazwischen) entscheidet weiter die Uhrzeit – die unterlegene Fassung bleibt im Konfliktprotokoll und kann zurückgeholt werden. |
+
+Neue Tests in src/sync/sync.test.ts: gleiche Millisekunde mit Upload dazwischen (eingefrorene Uhr), verspätet gespeicherte Änderung mit älterem Zeitstempel, iPhone-Uhr eine Stunde vor. Gegenprobe: Ohne die jeweilige Korrektur schlägt der passende Test fehl. Ergebnis: 38/38 Tests, fünf Durchläufe hintereinander stabil; Build ok; Browser-Test mit zwei Geräten gegen simuliertes Drive ohne Fehler.
+
+## Umsetzung 2. Sync-Review (14.11.2026, Claude)
+
+| Befund | Status | Umsetzung |
+|---|---|---|
+| Mittel bis hoch – gleichzeitige Uploads verlieren die unterlegene Fassung ohne Konfliktprotokoll | ✅ behoben | Jede Änderungs- und Gesamtstand-Datei enthält jetzt den Kenntnisstand des Absenders (`seen`: je Gerät der höchste bereits empfangene Zeitstempel, gespeichert als `sync:seen`). Beim Zusammenführen gilt eine eigene Fassung als gleichzeitig geändert, wenn sie noch nicht hochgeladen ist **oder** der Absender sie noch nicht kannte. Damit landet die unterlegene Fassung auch dann im Konfliktprotokoll, wenn beide Geräte schon hochgeladen hatten. Kein Fehlalarm für automatisch erzeugte Einträge (GENESIS) und für ältere eigene Fassungen, die ein anderes Gerät in einem Gesamtstand weiterreicht. |
+
+Neue Tests: paralleler Upload (beide Geräte lesen dieselbe Dateiliste, dann laden beide hoch → Konflikt protokolliert, Zurückholen funktioniert auf beiden Geräten), Änderungen nacheinander mit Abgleich (kein Konflikt), veralteter Gesamtstand mit eigener alter Fassung (kein Konflikt). Gegenprobe: mit der alten Erkennung bzw. ohne Autor-Prüfung schlägt jeweils der passende Test fehl. Ergebnis: 41/41 Tests, drei Durchläufe stabil; Build ok; Browser-Test mit zwei Geräten gegen simuliertes Drive ohne Fehler.
+
+Bekannte Grenze: Bei mehr als zwei Geräten kann ein Konflikt zwischen Gerät A und B, der nur über einen Gesamtstand von Gerät C ankommt, unprotokolliert bleiben (Ergebnis ist trotzdem einheitlich „neuer gewinnt“). Für PC + iPhone tritt das nicht auf.

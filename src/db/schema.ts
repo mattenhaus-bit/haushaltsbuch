@@ -140,3 +140,16 @@ export function useTestDb(name: string) {
   db = new HaushaltDB(name);
   return db;
 }
+
+/** Nur für Tests: zwischen simulierten Geräten umschalten */
+export function setDb(instance: HaushaltDB) {
+  db = instance;
+}
+
+/** Zeitstempel für automatisch erzeugte Datensätze (Startdaten, Fixkosten-Instanzen):
+ *  so alt, dass jede echte Änderung auf irgendeinem Gerät beim Synchronisieren gewinnt. */
+export const GENESIS = '2000-01-01T00:00:00.000Z';
+
+/** Tabellen, die zwischen Geräten synchronisiert werden (Einstellungen nicht) */
+export const SYNC_TABLES = ['accounts', 'categories', 'recurring', 'pots', 'transactions', 'budgets', 'merchants'] as const;
+export type SyncTable = (typeof SYNC_TABLES)[number];

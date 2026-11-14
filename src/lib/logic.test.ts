@@ -206,7 +206,7 @@ describe('Monatsrechnung mit Datenbank (Beispieldaten)', () => {
     const json = await A.exportBackup();
     await A.addExpense({ amount: 999, date: '2030-02-02', categoryId: 'exp-kleidung' });
     await A.importBackup(json);
-    const t = (await db.transactions.toArray()).filter((x) => x.kind === 'expense');
+    const t = (await db.transactions.toArray()).filter((x) => x.kind === 'expense' && !x.deleted);
     expect(t.length).toBe(1);
     expect(t[0].amount).toBe(1234);
   });

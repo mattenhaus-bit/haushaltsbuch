@@ -4,8 +4,8 @@
  * Persönliche Fixkosten, Töpfe usw. kommen über „Mehr → Startdaten / Daten importieren“
  * aus einer privaten Datei (Ordner privat/, wird nie hochgeladen) oder über den Excel-Import.
  */
-import { db, type Account, type Category, type MerchantRule } from './schema';
-import { deviceId, nowIso } from './meta';
+import { db, GENESIS, type Account, type Category, type MerchantRule } from './schema';
+import { deviceId } from './meta';
 import { currentMonth } from '../lib/dates';
 type Seed<T> = Omit<T, 'updatedAt' | 'deviceId'>;
 
@@ -97,7 +97,8 @@ export const DEFAULT_SETTINGS: Record<string, unknown> = {
 export async function seedIfEmpty(): Promise<boolean> {
   if ((await db.accounts.count()) > 0) return false;
   const dev = await deviceId();
-  const meta = { updatedAt: nowIso(), deviceId: dev, deleted: 0 as const };
+  // GENESIS-Zeitstempel: jedes Gerät erzeugt dieselben Startdaten; echte Änderungen gewinnen immer
+  const meta = { updatedAt: GENESIS, deviceId: dev, deleted: 0 as const };
   await db.transaction('rw', [db.accounts, db.categories, db.merchants, db.settings], async () => {
     await db.accounts.bulkPut(accounts.map((a) => ({ ...a, ...meta })));
     await db.categories.bulkPut(buildCategories().map((c) => ({ ...c, ...meta })));

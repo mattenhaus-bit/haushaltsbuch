@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { addMonths, monthLabel, type Month } from '../lib/dates';
 import { euro, type Cents } from '../lib/money';
 import type { AppData } from '../data';
@@ -73,10 +73,14 @@ export function Money({ c, sign = false, className = '' }: { c: Cents; sign?: bo
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
+  // Beschriftung mit dem Eingabefeld verknüpfen (Screenreader, Antippen der Beschriftung)
+  const autoId = useId();
+  const single = isValidElement<{ id?: string }>(children) ? children : null;
+  const id = single ? (single.props.id ?? autoId) : undefined;
   return (
     <div className="field">
-      <label>{label}</label>
-      {children}
+      <label htmlFor={id}>{label}</label>
+      {single ? cloneElement(single, { id }) : children}
     </div>
   );
 }

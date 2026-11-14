@@ -15,7 +15,9 @@ Fachliche Grundlage: eine bestehende Excel-Haushaltsbuchvorlage. Konzept: siehe 
 
 **Excel-Import (14.11.2026):** Mehr → Excel-Import. Liest die Haushaltsbuch-Vorlage (Monatsblätter JAN–DEC + Einkaufsliste) direkt im Browser, zeigt einen Prüfbericht je Monat (Excel = App) und übernimmt erst nach Bestätigung. Feste IDs verhindern Doppelte, Import pro Jahr wieder entfernbar, automatische Sicherung vorher.
 
-**Noch nicht enthalten:** Google-Drive-Synchronisation (Phase 6), Jahres-Finanzbericht mit KI (v1.1).
+**Synchronisation:** verschlüsselt über den versteckten App-Ordner in Google Drive (Mehr → Synchronisation).
+
+**Noch nicht enthalten:** Jahres-Finanzbericht mit KI (v1.1).
 Die Daten liegen bis dahin **nur lokal im Browser** – bitte regelmäßig unter „Mehr → Sicherung herunterladen“ sichern.
 
 ## Auf dem PC starten

@@ -9,6 +9,7 @@ import { centsToInput, euroShort, parseEuro } from '../lib/money';
 import { catLabel, type AppData } from '../data';
 import { CategoryPicker, ConfirmButton, Field, Money, pressable, Sheet } from '../components/ui';
 import { ImportSheet } from './ImportSheet';
+import { SyncCard } from './SyncCard';
 import { removeImport, type ImportLogEntry } from '../import/apply';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -60,6 +61,7 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
       <div className="pagehead"><div><h1>Mehr</h1><div className="sub">Töpfe, Kategorien, Einstellungen</div></div></div>
       <div className="cols c2">
         <div className="stack">
+          <SyncCard d={d} toast={toast} />
           <div className="card">
             <h2>Rücklagen-Töpfe <button className="btn sm primary" onClick={() => setPot('new')}>+ Neu</button></h2>
             {d.pots.map((p) => {
@@ -150,9 +152,11 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
             </label>
           </div>
           <div className="card">
-            <h2>Datensicherung</h2>
+            <h2>Datensicherung als Datei</h2>
             <p className="small muted" style={{ marginTop: 0 }}>
-              Deine Daten liegen bisher <strong>nur auf diesem Gerät</strong>. Die verschlüsselte Google-Drive-Synchronisation folgt im nächsten Schritt. Bis dahin bitte regelmäßig sichern.
+              {d.settings['sync:vault']
+                ? 'Zusätzlich zur Synchronisation kannst du jederzeit eine Sicherungsdatei herunterladen. Achtung: Die Datei ist nicht verschlüsselt – sicher aufbewahren.'
+                : <>Ohne Synchronisation liegen deine Daten <strong>nur auf diesem Gerät</strong>. Bitte regelmäßig eine Sicherung herunterladen (die Datei ist nicht verschlüsselt).</>}
               {lastBackup && <><br />Letzte Sicherung: {new Date(lastBackup).toLocaleString('de-DE')}</>}
             </p>
             <div className="flex">
@@ -183,7 +187,7 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
               </div>
             )}
           </div>
-          <p className="small muted" style={{ textAlign: 'center' }}>Haushaltsbuch · Version 0.1 (MVP)</p>
+          <p className="small muted" style={{ textAlign: 'center' }}>Haushaltsbuch · Version 0.5</p>
         </div>
       </div>
 

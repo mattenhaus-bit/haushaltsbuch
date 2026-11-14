@@ -26,7 +26,7 @@ Es gibt **keinen Server** und **keine Geheimnisse/Schlüssel** im Code. Die Fina
 - Kein `--force`-Push, keine Löschungen außerhalb des Repos.
 
 ## Teil 1: Hochladen & online stellen
-1. Im Ordner `app`: `npm ci`, `npm test` (erwartet: 18 Tests bestanden), `npm run build` – alles muss fehlerfrei durchlaufen.
+1. Im Ordner `app`: `npm ci`, `npm test`, `npm run build` – alles muss fehlerfrei durchlaufen. Erwartet: **41 Tests** in `src/` (Stand 14.11.2026, Phase 6 Synchronisation inkl. Zeitstempel-Korrektur). Lokal beim Nutzer kann ein zusätzlicher Test aus `privat/` mitlaufen (prüft mit den echten Excel-Dateien); der gehört nicht ins Repository.
 2. Git ist bereits initialisiert (Branch `main`). Datenschutz-Prüfung wie oben, dann erster Commit.
 3. Neues GitHub-Repository **`haushaltsbuch`** im Konto des Nutzers anlegen.
    - Hinweis: GitHub Pages ist im kostenlosen Konto nur für **öffentliche** Repositories verfügbar. Das ist hier unkritisch, weil keine Daten und keine Geheimnisse im Code sind. Falls der Nutzer ein Pro-Konto hat, geht auch privat. Im Zweifel den Nutzer fragen.
@@ -54,4 +54,17 @@ Gefundene Probleme **nicht selbst beheben**, sondern im Bericht beschreiben und 
 
 ## Was als Nächstes kommt (nicht Teil deines Auftrags)
 - Excel-Import direkt in der App (läuft im Browser, Daten verlassen das Gerät nicht)
-- Verschlüsselte Synchronisation über Google Drive (Google-Anmeldung braucht dann die feste Adresse von GitHub Pages)
+
+## Phase 6 – verschlüsselte Google-Drive-Synchronisation (Stand 14.11.2026)
+
+- `src/config.ts`: öffentliche OAuth-Client-ID (darf im Frontend stehen). **Kein Clientschlüssel** – wird nicht benötigt und darf nie ins Repository.
+- `src/sync/crypto.ts`: AES-256-GCM (WebCrypto). Datenschlüssel, eingepackt per PBKDF2-SHA256 (600.000 Iterationen) mit Tresor-Passwort bzw. Wiederherstellungsschlüssel. `vault.json` enthält nur eingepackte Schlüssel.
+- `src/sync/drive.ts`: Drive-REST nur im versteckten App-Ordner (Scope `drive.appdata`).
+- `src/sync/engine.ts`: je Gerät eigene Änderungspakete `ops-*.enc`, Gesamtstände `snap-*.enc` (wöchentlich bzw. nach 40 Paketen, 10 bleiben). Zusammenführung je Datensatz „neuer gewinnt“, Konfliktprotokoll mit Wiederherstellung.
+- `src/sync/auth.ts`: Google Identity Services Token-Client, Token ca. 1 h, keine Refresh-Tokens; danach Knopf „Bei Google anmelden“.
+- `src/sync/controller.ts`: automatische Synchronisation (Start, Rückkehr in die App, online, 4 s nach Änderungen, alle 3 min).
+- Automatisch erzeugte Datensätze (Startdaten, Fixkosten-Monatseinträge) tragen den Zeitstempel `2000-01-01` (`GENESIS`), damit echte Änderungen immer gewinnen.
+- Wiederherstellen einer Sicherung stempelt alle Datensätze neu und markiert fehlende als gelöscht (wirkt so auch auf anderen Geräten).
+- Zeitstempel (nach Codex-Review): `nowIso()` ist eine hybride logische Uhr – streng steigend, nie zwei gleiche Werte, läuft bei zurückgestellter Geräteuhr weiter vorwärts und berücksichtigt empfangene Zeitstempel (`observeTime`, gespeichert als `sync:clock`, geladen per `initClock()` beim App-Start). Upload-Cursor mit 10-Sekunden-Sicherheitsfenster und Liste bereits gesendeter Fassungen (`sync:recent`).
+- Konflikterkennung (nach 2. Codex-Review): Jede Datei enthält den Kenntnisstand des Absenders (`seen`: je Gerät höchster empfangener Zeitstempel). Kannte der Absender unsere Fassung nicht, war die Änderung gleichzeitig → unterlegene Fassung ins Konfliktprotokoll, auch wenn beide schon hochgeladen hatten. Automatisch erzeugte Einträge (GENESIS) und ältere eigene Fassungen zählen nicht als Konflikt.
+- Tests: `src/sync/sync.test.ts` (Verschlüsselung, gleichzeitige Uploads + zwei/drei simulierte Geräte, gleiche Millisekunde, verspätet gespeicherte Änderung, vorgehende Geräteuhr).

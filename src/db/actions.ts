@@ -1,5 +1,5 @@
-import { db, type Category, type MerchantRule, type Pot, type Recurring, type Transaction } from './schema';
-import { alive, deviceId, newId, stamp, stampSync } from './meta';
+import { db, GENESIS, SYNC_TABLES, type Category, type MerchantRule, type Pot, type Recurring, type Transaction } from './schema';
+import { alive, deviceId, newId, nowIso, stamp, stampSync } from './meta';
 import { budgetMonthForIncome, compareMonth, dayInMonth, monthOf, type Day, type Month } from '../lib/dates';
 import { isActive, isDue, potRate, potTxId, priceFor, recurringTxId } from '../lib/recurring';
 import type { Cents } from '../lib/money';
@@ -17,6 +17,10 @@ async function budgetAccount(): Promise<string> {
   const accs = (await db.accounts.toArray()).filter(alive);
   return (accs.find((a) => a.isBudget) ?? accs.find((a) => a.kind === 'giro') ?? accs[0]).id;
 }
+
+/** Automatisch erzeugte Instanzen bekommen den GENESIS-Zeitstempel: jedes Gerät erzeugt sie identisch,
+ *  und jede echte Änderung (z. B. Abhaken auf dem iPhone) gewinnt beim Synchronisieren. */
+const genesis = <T extends { updatedAt: string }>(x: T): T => ({ ...x, updatedAt: GENESIS });
 
 /**
  * Legt für einen Monat alle fälligen Fixkosten und Topf-Raten als offene Buchungen an.
@@ -36,10 +40,10 @@ export async function ensureMonth(m: Month): Promise<number> {
     const id = recurringTxId(r.id, m);
     if (await db.transactions.get(id)) continue;
     created.push(
-      await stamp<Transaction>({
+      genesis(await stamp<Transaction>({
         id, kind: 'bill', date: dayInMonth(m, r.dueDay), month: m, amount: priceFor(r, m),
         accountId: giro, categoryId: r.categoryId, text: r.name, recurringId: r.id, paid: 0
-      })
+      }))
     );
   }
   for (const p of pots) {
@@ -47,10 +51,10 @@ export async function ensureMonth(m: Month): Promise<number> {
     const id = potTxId(p.id, m);
     if (await db.transactions.get(id)) continue;
     created.push(
-      await stamp<Transaction>({
+      genesis(await stamp<Transaction>({
         id, kind: 'bill', date: dayInMonth(m, 1), month: m, amount: potRate(p), accountId: giro,
         toAccountId: p.accountId, categoryId: 'bill-ruecklagen', text: `Rücklage ${p.name}`, potId: p.id, paid: 0
-      })
+      }))
     );
   }
   if (created.length) await db.transactions.bulkPut(created);
@@ -238,11 +242,40 @@ export async function saveMerchant(m: Partial<MerchantRule> & Pick<MerchantRule,
 
 // ---------- Backup ----------
 const TABLES = ['accounts', 'categories', 'recurring', 'pots', 'transactions', 'budgets', 'merchants', 'settings'] as const;
+/** Gerätebezogene Einstellungen, die nie in eine Sicherung gehören bzw. beim Wiederherstellen erhalten bleiben */
+const isDeviceSetting = (key: string) => key === 'deviceId' || key.startsWith('sync:') || key.startsWith('backup:');
 
 export async function exportBackup(): Promise<string> {
   const data: Record<string, unknown[]> = {};
   for (const t of TABLES) data[t] = await db.table(t).toArray();
+  data.settings = (data.settings as { key: string }[]).filter((s) => !isDeviceSetting(s.key));
   return JSON.stringify({ app: 'haushaltsbuch', version: 1, exportedAt: new Date().toISOString(), data }, null, 1);
+}
+
+/**
+ * Ersetzt den Datenbestand durch die angegebenen Datensätze – synchronisationsfest:
+ * Alle Datensätze werden als neue Änderung dieses Geräts gestempelt, nicht enthaltene werden
+ * als gelöscht markiert. So übernehmen auch die anderen Geräte den wiederhergestellten Stand.
+ */
+export async function replaceAllData(data: Record<string, unknown[] | undefined>) {
+  const dev = await deviceId();
+  const now = nowIso();
+  const tables = SYNC_TABLES.map((t) => db.table(t));
+  await db.transaction('rw', [...tables, db.settings], async () => {
+    for (const t of SYNC_TABLES) {
+      const rows = ((data[t] ?? []) as { id?: string }[]).filter((r) => r && typeof r.id === 'string');
+      const keep = new Set(rows.map((r) => r.id));
+      const gone = (await db.table(t).toArray()).filter((r: { id: string }) => !keep.has(r.id));
+      await db.table(t).bulkPut([
+        ...rows.map((r) => ({ deleted: 0, ...r, updatedAt: now, deviceId: dev })),
+        ...gone.map((r: object) => ({ ...r, deleted: 1, updatedAt: now, deviceId: dev }))
+      ]);
+    }
+    if (data.settings) {
+      for (const s of await db.settings.toArray()) if (!isDeviceSetting(s.key)) await db.settings.delete(s.key);
+      await db.settings.bulkPut((data.settings as { key: string; value: unknown }[]).filter((s) => s && typeof s.key === 'string' && !isDeviceSetting(s.key)));
+    }
+  });
 }
 
 /**
@@ -255,10 +288,13 @@ export async function mergeImport(json: string): Promise<Record<string, number>>
   if (parsed?.app !== 'haushaltsbuch' || !parsed.data) throw new Error('Keine gültige Haushaltsbuch-Datei');
   const counts: Record<string, number> = {};
   const tables = TABLES.filter((t) => t !== 'settings');
+  const dev = await deviceId();
+  const now = nowIso();
   await db.transaction('rw', tables.map((t) => db.table(t)), async () => {
     for (const t of tables) {
       const rows = (parsed.data[t] ?? []) as { id?: string }[];
-      const valid = rows.filter((r) => r && typeof r.id === 'string').map((r) => ({ deleted: 0, ...r }));
+      // als Änderung dieses Geräts stempeln, damit die Daten an die anderen Geräte gehen
+      const valid = rows.filter((r) => r && typeof r.id === 'string').map((r) => ({ deleted: 0, ...r, updatedAt: now, deviceId: dev }));
       if (valid.length) await db.table(t).bulkPut(valid);
       if (valid.length) counts[t] = valid.length;
     }
@@ -271,12 +307,5 @@ export async function mergeImport(json: string): Promise<Record<string, number>>
 export async function importBackup(json: string) {
   const parsed = JSON.parse(json);
   if (parsed?.app !== 'haushaltsbuch' || !parsed.data) throw new Error('Keine gültige Haushaltsbuch-Sicherung');
-  await db.transaction('rw', TABLES.map((t) => db.table(t)), async () => {
-    for (const t of TABLES) {
-      const deviceSetting = t === 'settings' ? await db.settings.get('deviceId') : undefined;
-      await db.table(t).clear();
-      await db.table(t).bulkPut(parsed.data[t] ?? []);
-      if (deviceSetting) await db.settings.put(deviceSetting); // Geräte-ID bleibt pro Gerät
-    }
-  });
+  await replaceAllData(parsed.data);
 }
