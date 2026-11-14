@@ -1,5 +1,5 @@
 import { db, type Category, type MerchantRule, type Pot, type Recurring, type Transaction } from './schema';
-import { alive, newId, stamp } from './meta';
+import { alive, deviceId, newId, stamp, stampSync } from './meta';
 import { budgetMonthForIncome, compareMonth, dayInMonth, monthOf, type Day, type Month } from '../lib/dates';
 import { isActive, isDue, potRate, potTxId, priceFor, recurringTxId } from '../lib/recurring';
 import type { Cents } from '../lib/money';
@@ -149,26 +149,30 @@ export async function saveCategory(c: Partial<Category> & Pick<Category, 'name' 
 /** Kategorie A in B zusammenführen: alle Verweise (Buchungen, Unterkategorien, Fixkosten, Pläne, Läden) umhängen, A archivieren */
 export async function mergeCategory(fromId: string, toId: string) {
   if (fromId === toId) return;
-  await db.transaction('rw', [db.transactions, db.categories, db.recurring, db.budgets, db.merchants, db.settings], async () => {
+  const dev = await deviceId();
+  // Innerhalb der Transaktion nur Datenbank-Operationen (stampSync statt stamp)
+  await db.transaction('rw', [db.transactions, db.categories, db.recurring, db.budgets, db.merchants], async () => {
     const txs = await db.transactions.where('categoryId').equals(fromId).toArray();
-    for (const t of txs) await db.transactions.put(await stamp({ ...t, categoryId: toId }));
+    await db.transactions.bulkPut(txs.map((t) => stampSync({ ...t, categoryId: toId }, dev)));
     const subs = await db.categories.where('parentId').equals(fromId).toArray();
-    for (const s of subs) await db.categories.put(await stamp({ ...s, parentId: toId }));
-    for (const r of (await db.recurring.toArray()).filter((r) => r.categoryId === fromId)) await db.recurring.put(await stamp({ ...r, categoryId: toId }));
-    for (const m of (await db.merchants.toArray()).filter((m) => m.categoryId === fromId)) await db.merchants.put(await stamp({ ...m, categoryId: toId }));
+    await db.categories.bulkPut(subs.map((c) => stampSync({ ...c, parentId: toId }, dev)));
+    const recs = (await db.recurring.toArray()).filter((r) => r.categoryId === fromId);
+    await db.recurring.bulkPut(recs.map((r) => stampSync({ ...r, categoryId: toId }, dev)));
+    const rules = (await db.merchants.toArray()).filter((m) => m.categoryId === fromId);
+    await db.merchants.bulkPut(rules.map((m) => stampSync({ ...m, categoryId: toId }, dev)));
     // Pläne: in Zielkategorie zusammenrechnen
-    for (const b of await db.budgets.toArray()) {
-      if (b.categoryId !== fromId || b.deleted) continue;
-      const target = (await db.budgets.where('[month+categoryId]').equals([b.month, toId]).toArray()).find((x) => !x.deleted);
+    for (const bud of await db.budgets.toArray()) {
+      if (bud.categoryId !== fromId || bud.deleted) continue;
+      const target = (await db.budgets.where('[month+categoryId]').equals([bud.month, toId]).toArray()).find((x) => !x.deleted);
       if (target) {
-        await db.budgets.put(await stamp({ ...target, plan: target.plan + b.plan }));
-        await db.budgets.put(await stamp({ ...b, deleted: 1 }));
+        await db.budgets.put(stampSync({ ...target, plan: target.plan + bud.plan }, dev));
+        await db.budgets.put(stampSync({ ...bud, deleted: 1 }, dev));
       } else {
-        await db.budgets.put(await stamp({ ...b, categoryId: toId }));
+        await db.budgets.put(stampSync({ ...bud, categoryId: toId }, dev));
       }
     }
     const from = await db.categories.get(fromId);
-    if (from) await db.categories.put(await stamp({ ...from, archived: 1 }));
+    if (from) await db.categories.put(stampSync({ ...from, archived: 1 }, dev));
   });
 }
 

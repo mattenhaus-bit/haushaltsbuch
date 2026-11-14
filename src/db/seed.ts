@@ -47,7 +47,7 @@ const billCats: [string, string, string, string][] = [
   ['bill-ruecklagen', 'Rücklagen (Töpfe)', '🫙', '#eda100']
 ];
 
-function slug(s: string) {
+export function slug(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9äöüß]+/g, '-').replace(/^-|-$/g, '');
 }
 

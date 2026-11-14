@@ -10,3 +10,4 @@ src/demo/
 *.json.bak
 haushaltsbuch-sicherung-*.json
 .env*
+*.tsbuildinfo

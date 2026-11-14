@@ -13,7 +13,9 @@ Fachliche Grundlage: eine bestehende Excel-Haushaltsbuchvorlage. Konzept: siehe 
 - Jahresansicht (Matrix wie ANNUAL TOTALS, Sparquote, Top-10), Buchungsliste mit Suche
 - Kategorien (2 Ebenen), Läden, Konten, Töpfe verwalten; Dark Mode; JSON-Sicherung
 
-**Noch nicht enthalten:** Google-Drive-Synchronisation (Phase 6), Excel-Import (Phase 7), Jahres-Finanzbericht mit KI (v1.1).
+**Excel-Import (14.11.2026):** Mehr → Excel-Import. Liest die Haushaltsbuch-Vorlage (Monatsblätter JAN–DEC + Einkaufsliste) direkt im Browser, zeigt einen Prüfbericht je Monat (Excel = App) und übernimmt erst nach Bestätigung. Feste IDs verhindern Doppelte, Import pro Jahr wieder entfernbar, automatische Sicherung vorher.
+
+**Noch nicht enthalten:** Google-Drive-Synchronisation (Phase 6), Jahres-Finanzbericht mit KI (v1.1).
 Die Daten liegen bis dahin **nur lokal im Browser** – bitte regelmäßig unter „Mehr → Sicherung herunterladen“ sichern.
 
 ## Auf dem PC starten

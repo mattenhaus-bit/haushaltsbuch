@@ -7,7 +7,9 @@ import { potStatus } from '../lib/calc';
 import { currentMonth, today } from '../lib/dates';
 import { centsToInput, euroShort, parseEuro } from '../lib/money';
 import { catLabel, type AppData } from '../data';
-import { CategoryPicker, Field, Money, pressable, Sheet } from '../components/ui';
+import { CategoryPicker, ConfirmButton, Field, Money, pressable, Sheet } from '../components/ui';
+import { ImportSheet } from './ImportSheet';
+import { removeImport, type ImportLogEntry } from '../import/apply';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const GROUPS: [CategoryGroup, string][] = [['expense', 'Ausgaben'], ['income', 'Einnahmen'], ['bill', 'Fixkosten-Bereiche']];
@@ -18,6 +20,9 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
   const [cat, setCat] = useState<Partial<Category> | null>(null);
   const [merch, setMerch] = useState<MerchantRule | 'new' | null>(null);
   const [catGroup, setCatGroup] = useState<CategoryGroup>('expense');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const imports = (d.settings.imports as ImportLogEntry[] | undefined) ?? [];
+  const preBackup = d.settings['backup:vorImport'] as { at: string; json: string } | undefined;
 
   const theme = (d.settings.theme as string) ?? 'system';
   const shift = (d.settings.incomeShiftDay as number) ?? 25;
@@ -130,6 +135,21 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
             </Field>
           </div>
           <div className="card">
+            <h2>Excel-Import</h2>
+            <p className="small muted" style={{ marginTop: 0 }}>Übernimmt ein Jahr aus deiner Excel-Haushaltsbuch-Vorlage. Du siehst vorher einen Prüfbericht gegen die Excel-Summen. Die Datei wird nur gelesen.</p>
+            {imports.map((l) => (
+              <div className="row" key={l.year}>
+                <span className="cico sm" style={{ background: 'var(--surface-2)' }}>📊</span>
+                <div className="grow"><div className="title">{l.year}</div><div className="sub">{l.count} Buchungen · {l.mode === 'sums' ? 'Monatssummen' : 'Einzelkäufe'} · {new Date(l.at).toLocaleDateString('de-DE')}</div></div>
+                <ConfirmButton className="btn sm danger" label="Entfernen" confirmLabel="Sicher? Tippen" onConfirm={async () => toast(`${await removeImport(l.year)} Buchungen aus ${l.year} entfernt`)} />
+              </div>
+            ))}
+            <label className="btn primary block" style={{ textAlign: 'center', marginTop: 8 }}>
+              Excel-Datei auswählen (.xlsx)
+              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setImportFile(f); e.target.value = ''; }} />
+            </label>
+          </div>
+          <div className="card">
             <h2>Datensicherung</h2>
             <p className="small muted" style={{ marginTop: 0 }}>
               Deine Daten liegen bisher <strong>nur auf diesem Gerät</strong>. Die verschlüsselte Google-Drive-Synchronisation folgt im nächsten Schritt. Bis dahin bitte regelmäßig sichern.
@@ -147,6 +167,12 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
               <input type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && addFile(e.target.files[0])} />
             </label>
             <p className="small muted" style={{ margin: '6px 0 0' }}>Fügt z. B. deine Fixkosten und Töpfe aus <code>privat/startdaten.json</code> hinzu, ohne vorhandene Daten zu löschen.</p>
+            {preBackup && (
+              <div className="small muted" style={{ marginTop: 10 }}>
+                Automatische Sicherung vor dem letzten Import: {new Date(preBackup.at).toLocaleString('de-DE')}{' '}
+                <button className="btn sm" onClick={() => setPending({ name: 'Sicherung vor Import', text: preBackup.json })}>Wiederherstellen …</button>
+              </div>
+            )}
             {pending && (
               <div className="note" style={{ marginTop: 10 }}>
                 „{pending.name}“ ersetzt <strong>alle aktuellen Daten</strong>. Tipp: vorher selbst eine Sicherung herunterladen.
@@ -164,6 +190,7 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
       {pot && <PotSheet d={d} pot={pot === 'new' ? undefined : pot} onClose={() => setPot(null)} />}
       {acc && <AccountSheet acc={acc} onClose={() => setAcc(null)} />}
       {cat && <CategorySheet d={d} cat={cat} onClose={() => setCat(null)} />}
+      {importFile && <ImportSheet d={d} file={importFile} log={imports} onClose={() => setImportFile(null)} onDone={(m) => { setImportFile(null); toast(m); }} />}
       {merch && <MerchantSheet d={d} m={merch === 'new' ? undefined : merch} onClose={() => setMerch(null)} />}
     </>
   );

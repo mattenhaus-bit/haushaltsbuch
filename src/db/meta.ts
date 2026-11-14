@@ -28,4 +28,12 @@ export async function stamp<T extends SyncMeta>(obj: Omit<T, 'id' | 'updatedAt' 
   return { deleted: 0, ...obj, id: obj.id ?? newId(), updatedAt: nowIso(), deviceId: await deviceId() } as T;
 }
 
+/**
+ * Synchrone Variante für die Verwendung INNERHALB einer Datenbank-Transaktion
+ * (dort darf nicht auf fremde Promises gewartet werden). Geräte-ID vorher mit deviceId() holen.
+ */
+export function stampSync<T extends SyncMeta>(obj: Omit<T, 'id' | 'updatedAt' | 'deviceId'> & Partial<SyncMeta>, dev: string): T {
+  return { deleted: 0, ...obj, id: obj.id ?? newId(), updatedAt: nowIso(), deviceId: dev } as T;
+}
+
 export const alive = <T extends { deleted?: 0 | 1 }>(x: T) => !x.deleted;
