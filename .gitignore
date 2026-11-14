@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-preview
+# Persönliche Finanzdaten – NIEMALS hochladen
+privat/
+src/demo/
+*.xlsx
+*.xls
+*.csv
+*.json.bak
+haushaltsbuch-sicherung-*.json
+.env*
