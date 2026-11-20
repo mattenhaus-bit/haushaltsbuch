@@ -26,7 +26,7 @@ Es gibt **keinen Server** und **keine Geheimnisse/Schlüssel** im Code. Die Fina
 - Kein `--force`-Push, keine Löschungen außerhalb des Repos.
 
 ## Teil 1: Hochladen & online stellen
-1. Im Ordner `app`: `npm ci`, `npm test`, `npm run build` – alles muss fehlerfrei durchlaufen. Erwartet: **41 Tests** in `src/` (Stand 14.11.2026, Phase 6 Synchronisation inkl. Zeitstempel-Korrektur). Lokal beim Nutzer kann ein zusätzlicher Test aus `privat/` mitlaufen (prüft mit den echten Excel-Dateien); der gehört nicht ins Repository.
+1. Im Ordner `app`: `npm ci`, `npm test`, `npm run build` – alles muss fehlerfrei durchlaufen. Erwartet: **50 Tests** in `src/` (Stand 20.11.2026, Version 0.6: Bedienung). Lokal beim Nutzer kann ein zusätzlicher Test aus `privat/` mitlaufen (prüft mit den echten Excel-Dateien); der gehört nicht ins Repository.
 2. Git ist bereits initialisiert (Branch `main`). Datenschutz-Prüfung wie oben, dann erster Commit.
 3. Neues GitHub-Repository **`haushaltsbuch`** im Konto des Nutzers anlegen.
    - Hinweis: GitHub Pages ist im kostenlosen Konto nur für **öffentliche** Repositories verfügbar. Das ist hier unkritisch, weil keine Daten und keine Geheimnisse im Code sind. Falls der Nutzer ein Pro-Konto hat, geht auch privat. Im Zweifel den Nutzer fragen.
@@ -68,3 +68,11 @@ Gefundene Probleme **nicht selbst beheben**, sondern im Bericht beschreiben und 
 - Zeitstempel (nach Codex-Review): `nowIso()` ist eine hybride logische Uhr – streng steigend, nie zwei gleiche Werte, läuft bei zurückgestellter Geräteuhr weiter vorwärts und berücksichtigt empfangene Zeitstempel (`observeTime`, gespeichert als `sync:clock`, geladen per `initClock()` beim App-Start). Upload-Cursor mit 10-Sekunden-Sicherheitsfenster und Liste bereits gesendeter Fassungen (`sync:recent`).
 - Konflikterkennung (nach 2. Codex-Review): Jede Datei enthält den Kenntnisstand des Absenders (`seen`: je Gerät höchster empfangener Zeitstempel). Kannte der Absender unsere Fassung nicht, war die Änderung gleichzeitig → unterlegene Fassung ins Konfliktprotokoll, auch wenn beide schon hochgeladen hatten. Automatisch erzeugte Einträge (GENESIS) und ältere eigene Fassungen zählen nicht als Konflikt.
 - Tests: `src/sync/sync.test.ts` (Verschlüsselung, gleichzeitige Uploads + zwei/drei simulierte Geräte, gleiche Millisekunde, verspätet gespeicherte Änderung, vorgehende Geräteuhr).
+
+## Version 0.6 – Bedienung (Stand 20.11.2026)
+
+- Kacheln der Monatsübersicht antippbar → `src/screens/KpiSheet.tsx`: Vergleich zum Vormonat in Euro und Prozent, Erklärung der Fixkosten-Veränderung je Posten, Stand seit Jahresbeginn, Vorjahresvergleich, Monatsverlauf, beim Sparen Zusammensetzung und kumulierter Verlauf. Kachel zeigt die Veränderung jetzt in Euro.
+- Kategorieauswahl neu (`src/components/pickers.tsx`): Suchfeld mit Vorschlägen (Name, eingebaute Stichwörter, Läden-Regeln, eigene frühere Buchungen), häufige Kategorien, „Alle Kategorien“ als Baum.
+- Beschreibung und Einkauf: Vorschläge beim Tippen aus früheren Eingaben und Läden (`src/lib/suggest.ts`), Kategorie wird übernommen; beim Einkauf je Laden sichtbar und änderbar.
+- Töpfe: direkt aus der Monatsübersicht antippbar, gemeinsames `src/screens/PotSheet.tsx` mit „Topf beenden“ und „Topf löschen“; beendete Töpfe in „Mehr“ eingeklappt.
+- Neue Tests: `src/lib/suggest.test.ts`, Topf beenden/löschen in `src/lib/logic.test.ts`. Testdaten erfunden.

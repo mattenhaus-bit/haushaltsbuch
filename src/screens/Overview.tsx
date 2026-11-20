@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Transaction } from '../db/schema';
 import { planSuggestion, potStatus, rollupToMain, summarizeMonth, type MonthSummary } from '../lib/calc';
 import { addMonths, currentMonth, daysInMonth, dayLabel, monthLabel, monthShort, today, type Month } from '../lib/dates';
@@ -8,22 +8,30 @@ import { CumulativeArea, PlanActualBars, Ring, Spark } from '../components/Chart
 import { MonthStrip } from '../components/Header';
 import { pressable } from '../components/ui';
 import type { EntryPreset } from '../App';
+import { KpiSheet, type KpiKind } from './KpiSheet';
+import { PotSheet } from './PotSheet';
+import type { Pot } from '../db/schema';
 
 const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
 
-function Delta({ cur, prev, goodWhenUp }: { cur: Cents; prev: Cents; goodWhenUp: boolean }) {
-  if (!prev) return <div className="d">kein Vormonat</div>;
+/** Veränderung zum Vormonat in Euro, z. B. „▼ 258 € zu Okt“ (Details beim Antippen der Kachel) */
+function Delta({ cur, prev, goodWhenUp, prevLabel }: { cur: Cents; prev: Cents; goodWhenUp: boolean; prevLabel: string }) {
+  if (!prev) return <div className="d">kein Wert im {prevLabel}</div>;
   const diff = cur - prev;
   const p = Math.round((diff / Math.abs(prev)) * 100);
   const up = diff > 0;
   const cls = diff === 0 ? '' : up === goodWhenUp ? (up ? 'up-good' : 'down-good') : up ? 'up-bad' : 'down-bad';
-  return <div className={`d ${cls}`}>{up ? '▲' : diff < 0 ? '▼' : '='} {Math.abs(p)} % zum Vormonat</div>;
+  if (diff === 0) return <div className="d">= wie im {prevLabel}</div>;
+  return <div className={`d ${cls}`} title={`${up ? '+' : '−'}${Math.abs(p)} % zum ${prevLabel}`}>{up ? '▲' : '▼'} {euroShort(Math.abs(diff))} zu {prevLabel}</div>;
 }
 
 export function Overview({ d, month, setMonth, openEntry, go, onEdit }: {
   d: AppData; month: Month; setMonth: (m: Month) => void; openEntry: (p: EntryPreset) => void; go: (s: 'bills' | 'more' | 'tx') => void; onEdit: (t: Transaction) => void;
 }) {
   const s = useMemo(() => summarizeMonth(month, d.txs, d.budgetAcc), [month, d]);
+  const [kpi, setKpi] = useState<KpiKind | null>(null);
+  const [potEdit, setPotEdit] = useState<Pot | null>(null);
+  const pl = monthShort(addMonths(month, -1));
   const hist = useMemo(() => Array.from({ length: 6 }, (_, i) => summarizeMonth(addMonths(month, i - 5), d.txs, d.budgetAcc)), [month, d]);
   const prev = hist[4];
   const last3 = hist.slice(2, 5).filter((h) => h.income || h.expenses || h.bills);
@@ -110,10 +118,10 @@ export function Overview({ d, month, setMonth, openEntry, go, onEdit }: {
           </section>
 
           <div className="tiles t4">
-            <div className="tile"><div className="k"><i style={{ background: 'var(--pos)' }} />Einnahmen</div><div className="v num">{euroShort(s.income)}</div><Delta cur={s.income} prev={prev.income} goodWhenUp /><Spark values={hist.map((h) => h.income)} color="var(--pos)" /></div>
-            <div className="tile"><div className="k"><i style={{ background: 'var(--s-exp)' }} />Ausgaben</div><div className="v num">{euroShort(s.expenses)}</div><Delta cur={s.expenses} prev={prev.expenses} goodWhenUp={false} /><Spark values={hist.map((h) => h.expenses)} color="var(--s-exp)" /></div>
-            <div className="tile"><div className="k"><i style={{ background: 'var(--s-fix)' }} />Fixkosten</div><div className="v num">{euroShort(fix)}</div><Delta cur={fix} prev={prev.bills - prev.potRates} goodWhenUp={false} /><Spark values={hist.map((h) => h.bills - h.potRates)} color="var(--s-fix)" /></div>
-            <div className="tile"><div className="k"><i style={{ background: 'var(--s-save)' }} />Sparquote</div><div className="v num">{saveRate.toLocaleString('de-DE')} %</div><div className="d">{euroShort(s.savedOrInvested + s.potRates - s.withdrawals)} zurückgelegt</div><Spark values={hist.map((h) => (h.income ? (h.savedOrInvested + h.potRates - h.withdrawals) / h.income : 0))} color="var(--s-save)" /></div>
+            <div className="tile click" {...pressable(() => setKpi('income'))} aria-label="Einnahmen – Details"><div className="k"><i style={{ background: 'var(--pos)' }} />Einnahmen</div><div className="v num">{euroShort(s.income)}</div><Delta cur={s.income} prev={prev.income} goodWhenUp prevLabel={pl} /><Spark values={hist.map((h) => h.income)} color="var(--pos)" /></div>
+            <div className="tile click" {...pressable(() => setKpi('expenses'))} aria-label="Ausgaben – Details"><div className="k"><i style={{ background: 'var(--s-exp)' }} />Ausgaben</div><div className="v num">{euroShort(s.expenses)}</div><Delta cur={s.expenses} prev={prev.expenses} goodWhenUp={false} prevLabel={pl} /><Spark values={hist.map((h) => h.expenses)} color="var(--s-exp)" /></div>
+            <div className="tile click" {...pressable(() => setKpi('fix'))} aria-label="Fixkosten – Details"><div className="k"><i style={{ background: 'var(--s-fix)' }} />Fixkosten</div><div className="v num">{euroShort(fix)}</div><Delta cur={fix} prev={prev.bills - prev.potRates} goodWhenUp={false} prevLabel={pl} /><Spark values={hist.map((h) => h.bills - h.potRates)} color="var(--s-fix)" /></div>
+            <div className="tile click" {...pressable(() => setKpi('save'))} aria-label="Sparquote – Details"><div className="k"><i style={{ background: 'var(--s-save)' }} />Sparquote</div><div className="v num">{saveRate.toLocaleString('de-DE')} %</div><div className="d">{euroShort(s.savedOrInvested + s.potRates - s.withdrawals)} zurückgelegt</div><Spark values={hist.map((h) => (h.income ? (h.savedOrInvested + h.potRates - h.withdrawals) / h.income : 0))} color="var(--s-save)" /></div>
           </div>
 
           <div className="card">
@@ -174,14 +182,14 @@ export function Overview({ d, month, setMonth, openEntry, go, onEdit }: {
           </div>
 
           <div className="card">
-            <h2>Tagesgeld & Töpfe <button className="btn sm" onClick={() => go('more')}>Verwalten</button></h2>
+            <h2>Tagesgeld & Töpfe <button className="btn sm" onClick={() => go('more')}>Alle Töpfe</button></h2>
             {tagesgeld?.floor !== undefined && (
               <div className="pot"><div className="jar"><i style={{ height: '100%', background: 'linear-gradient(180deg,#9ec5f4,#2a78d6)' }} /></div><div><div className="title">Notgroschen</div><div className="small muted">fester Sockel</div></div><b className="num">{euro(tagesgeld.floor)}</b></div>
             )}
             {pots.map((p) => {
               const fill = p.pot.yearlyAmount ? Math.max(0, Math.min(1, p.balance / p.pot.yearlyAmount)) : 0;
               return (
-                <div className="pot" key={p.pot.id}>
+                <div className="pot click" key={p.pot.id} {...pressable(() => setPotEdit(p.pot))} aria-label={`Topf ${p.pot.name} bearbeiten`}>
                   <div className="jar"><i style={{ height: `${fill * 100}%` }} /></div>
                   <div><div className="title">{p.pot.name}</div><div className="small muted">{Math.round(fill * 100)} % vom Jahresbedarf {euroShort(p.pot.yearlyAmount)}</div></div>
                   <b className={`num ${p.balance < 0 ? 'neg' : ''}`}>{euro(p.balance)}</b>
@@ -204,6 +212,8 @@ export function Overview({ d, month, setMonth, openEntry, go, onEdit }: {
           </div>
         </div>
       </div>
+      {kpi && <KpiSheet d={d} kind={kpi} month={month} onClose={() => setKpi(null)} />}
+      {potEdit && <PotSheet d={d} pot={potEdit} onClose={() => setPotEdit(null)} />}
     </>
   );
 }

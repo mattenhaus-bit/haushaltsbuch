@@ -100,6 +100,11 @@ export function DonutLegend({ segs, center, size = 150 }: { segs: Seg[]; center?
 }
 
 // ---------- Achsen-Helfer ----------
+/** Achsenbeschriftung in Euro: 1500 → „1,5k“, 3000 → „3k“ */
+function axisLabel(cents: number): string {
+  const e = cents / 100;
+  return Math.abs(e) >= 1000 ? `${(e / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}k` : String(Math.round(e));
+}
 function niceMax(v: number): number {
   if (v <= 0) return 100;
   const p = Math.pow(10, Math.floor(Math.log10(v)));
@@ -128,7 +133,7 @@ export function StackedBars({ labels, stacks, line, lineUntil, height = 220 }: {
         {ticks.map((v) => (
           <g key={v}>
             <line className="gridline" x1={L} x2={W} y1={y(v)} y2={y(v)} />
-            <text className="axis" x={L - 6} y={y(v) + 4} textAnchor="end">{v >= 100000 ? `${Math.round(v / 100000)}k` : Math.round(v / 100)}</text>
+            <text className="axis" x={L - 6} y={y(v) + 4} textAnchor="end">{axisLabel(v)}</text>
           </g>
         ))}
         {labels.map((l, i) => {
@@ -259,7 +264,7 @@ export function AreaLine({ labels, values, color = 'var(--s-save)', height = 160
     <div className="chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img" aria-label={name}>
         <defs><linearGradient id={gid} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={color} stopOpacity="0.3" /><stop offset="1" stopColor={color} stopOpacity="0.02" /></linearGradient></defs>
-        {[min, (min + max) / 2, max].map((v) => <g key={v}><line className="gridline" x1={L} x2={W} y1={y(v)} y2={y(v)} /><text className="axis" x={L - 6} y={y(v) + 4} textAnchor="end">{Math.abs(v) >= 100000 ? `${(v / 100000).toFixed(0)}k` : Math.round(v / 100)}</text></g>)}
+        {[min, (min + max) / 2, max].map((v) => <g key={v}><line className="gridline" x1={L} x2={W} y1={y(v)} y2={y(v)} /><text className="axis" x={L - 6} y={y(v) + 4} textAnchor="end">{axisLabel(v)}</text></g>)}
         <path d={`${pts} L${x(values.length - 1)},${y(Math.max(min, 0))} L${x(0)},${y(Math.max(min, 0))} Z`} fill={`url(#${gid})`} />
         <path d={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" />
         {values.map((v, i) => (

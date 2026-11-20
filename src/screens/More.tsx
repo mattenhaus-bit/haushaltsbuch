@@ -4,12 +4,13 @@ import { db } from '../db/schema';
 import { stamp } from '../db/meta';
 import * as A from '../db/actions';
 import { potStatus } from '../lib/calc';
-import { currentMonth, today } from '../lib/dates';
+import { today } from '../lib/dates';
 import { centsToInput, euroShort, parseEuro } from '../lib/money';
 import { catLabel, type AppData } from '../data';
 import { CategoryPicker, ConfirmButton, Field, Money, pressable, Sheet } from '../components/ui';
 import { ImportSheet } from './ImportSheet';
 import { SyncCard } from './SyncCard';
+import { PotSheet } from './PotSheet';
 import { removeImport, type ImportLogEntry } from '../import/apply';
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -17,6 +18,7 @@ const GROUPS: [CategoryGroup, string][] = [['expense', 'Ausgaben'], ['income', '
 
 export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
   const [pot, setPot] = useState<Pot | 'new' | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [acc, setAcc] = useState<Account | null>(null);
   const [cat, setCat] = useState<Partial<Category> | null>(null);
   const [merch, setMerch] = useState<MerchantRule | 'new' | null>(null);
@@ -64,21 +66,26 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
           <SyncCard d={d} toast={toast} />
           <div className="card">
             <h2>Rücklagen-Töpfe <button className="btn sm primary" onClick={() => setPot('new')}>+ Neu</button></h2>
-            {d.pots.map((p) => {
+            {[...d.pots.filter((p) => !p.archived), ...(showArchived ? d.pots.filter((p) => p.archived) : [])].map((p) => {
               const st = potStatus(p, d.txs);
               const rate = p.monthlyRate ?? Math.round(p.yearlyAmount / 12);
               return (
                 <div className="row click" key={p.id} {...pressable(() => setPot(p))} style={{ opacity: p.archived ? 0.5 : 1 }}>
                   <span className="cico sm" style={{ background: 'var(--surface-2)' }}>🫙</span>
                   <div className="grow">
-                    <div className="title">{p.name}</div>
+                    <div className="title">{p.name}{p.archived ? ' (beendet)' : ''}</div>
                     <div className="sub">{euroShort(rate)}/Monat · {euroShort(p.yearlyAmount)}/Jahr · fällig {p.dueMonths.map((m) => MONTH_SHORT[m - 1]).join(', ')}</div>
                   </div>
                   <Money c={st.balance} />
                 </div>
               );
             })}
-            <p className="small muted" style={{ margin: '8px 0 0' }}>Töpfe liegen auf dem Tagesgeld, zusätzlich zum Notgroschen. Die Monatsrate erscheint automatisch bei den Fixkosten.</p>
+            {d.pots.some((p) => p.archived) && (
+              <button className="btn sm" style={{ marginTop: 8 }} onClick={() => setShowArchived(!showArchived)}>
+                {showArchived ? 'Beendete Töpfe ausblenden' : `Beendete Töpfe zeigen (${d.pots.filter((p) => p.archived).length})`}
+              </button>
+            )}
+            <p className="small muted" style={{ margin: '8px 0 0' }}>Antippen zum Bearbeiten, Beenden oder Löschen. Töpfe liegen auf dem Tagesgeld, zusätzlich zum Notgroschen; die Monatsrate erscheint automatisch bei den Fixkosten.</p>
           </div>
           <div className="card">
             <h2>Konten</h2>
@@ -187,7 +194,7 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
               </div>
             )}
           </div>
-          <p className="small muted" style={{ textAlign: 'center' }}>Haushaltsbuch · Version 0.5</p>
+          <p className="small muted" style={{ textAlign: 'center' }}>Haushaltsbuch · Version 0.6</p>
         </div>
       </div>
 
@@ -197,37 +204,6 @@ export function More({ d, toast }: { d: AppData; toast: (m: string) => void }) {
       {importFile && <ImportSheet d={d} file={importFile} log={imports} onClose={() => setImportFile(null)} onDone={(m) => { setImportFile(null); toast(m); }} />}
       {merch && <MerchantSheet d={d} m={merch === 'new' ? undefined : merch} onClose={() => setMerch(null)} />}
     </>
-  );
-}
-
-function PotSheet({ d, pot, onClose }: { d: AppData; pot?: Pot; onClose: () => void }) {
-  const [name, setName] = useState(pot?.name ?? '');
-  const [yearly, setYearly] = useState(pot ? centsToInput(pot.yearlyAmount) : '');
-  const [rate, setRate] = useState(pot?.monthlyRate !== undefined ? centsToInput(pot.monthlyRate) : '');
-  const [opening, setOpening] = useState(pot ? centsToInput(pot.openingBalance) : '0');
-  const [due, setDue] = useState<number[]>(pot?.dueMonths ?? []);
-  const y = parseEuro(yearly), r = rate ? parseEuro(rate) : undefined, o = parseEuro(opening) ?? 0;
-  const tg = d.accounts.find((a) => a.kind === 'tagesgeld') ?? d.accounts[0];
-  const save = async (archived?: 0 | 1) => {
-    if (!name.trim() || y === null) return;
-    await A.savePot({ id: pot?.id, name: name.trim(), yearlyAmount: y, monthlyRate: r ?? undefined, openingBalance: o, dueMonths: due, accountId: pot?.accountId ?? tg.id, start: pot?.start ?? currentMonth(), archived: archived ?? pot?.archived });
-    await A.ensureMonth(currentMonth());
-    onClose();
-  };
-  return (
-    <Sheet title={pot ? `Topf ${pot.name}` : 'Neuer Topf'} onClose={onClose}>
-      <Field label="Name"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Auto-Reparatur" /></Field>
-      <div className="flex">
-        <div className="grow"><Field label="Jahresbedarf"><input className="input num" inputMode="decimal" value={yearly} onChange={(e) => setYearly(e.target.value)} /></Field></div>
-        <div className="grow"><Field label="Monatsrate (leer = ÷12)"><input className="input num" inputMode="decimal" value={rate} placeholder={y ? centsToInput(Math.round(y / 12)) : ''} onChange={(e) => setRate(e.target.value)} /></Field></div>
-      </div>
-      <Field label="Aktueller Bestand im Topf"><input className="input num" inputMode="decimal" value={opening} onChange={(e) => setOpening(e.target.value)} /></Field>
-      <Field label="Typische Fälligkeit">
-        <div className="chips">{MONTH_SHORT.map((m, i) => <button type="button" key={m} className={`chip ${due.includes(i + 1) ? 'on' : ''}`} onClick={() => setDue(due.includes(i + 1) ? due.filter((x) => x !== i + 1) : [...due, i + 1].sort((a, b) => a - b))}>{m}</button>)}</div>
-      </Field>
-      <button className="btn primary block" onClick={() => save()} disabled={!name.trim() || y === null}>Speichern</button>
-      {pot && <button className="btn block" style={{ marginTop: 8 }} onClick={() => save(pot.archived ? 0 : 1)}>{pot.archived ? 'Wieder aktivieren' : 'Archivieren (keine Raten mehr)'}</button>}
-    </Sheet>
   );
 }
 

@@ -1,7 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { addMonths, monthLabel, type Month } from '../lib/dates';
 import { euro, type Cents } from '../lib/money';
-import type { AppData } from '../data';
 
 /** Macht ein Element (z. B. eine Listenzeile) per Maus, Touch UND Tastatur bedienbar */
 export function pressable(onActivate: () => void) {
@@ -86,42 +85,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 
 /** Kategorie-Auswahl: Hauptkategorien als Chips, danach optional Unterkategorie */
-export function CategoryPicker({ d, group, value, onChange, top }: {
-  d: AppData; group: 'expense' | 'income' | 'bill'; value?: string; onChange: (id: string) => void; top?: string[];
-}) {
-  const mains = d.categories.filter((c) => c.group === group && !c.parentId && !c.archived);
-  const cur = value ? d.catById.get(value) : undefined;
-  const selMain = cur?.parentId ?? cur?.id;
-  const [showAll, setShowAll] = useState(!top);
-  const topSet = top ? top.map((id) => d.catById.get(id)).filter(Boolean) : [];
-  const list = showAll ? mains : topSet;
-  const subs = d.categories.filter((c) => c.parentId === selMain && !c.archived);
-  return (
-    <div>
-      <div className="chips">
-        {list.map((c) => {
-          const isOn = c!.id === value || c!.id === selMain;
-          return (
-            <button type="button" key={c!.id} className={`chip ${isOn ? 'on' : ''}`} onClick={() => onChange(c!.id)}>
-              {(c!.icon ?? d.catById.get(c!.parentId ?? '')?.icon ?? '')} {c!.parentId ? `${d.catById.get(c!.parentId)?.name} · ${c!.name}` : c!.name}
-            </button>
-          );
-        })}
-        {top && (
-          <button type="button" className="chip" onClick={() => setShowAll(!showAll)}>{showAll ? 'Weniger' : 'Alle …'}</button>
-        )}
-      </div>
-      {subs.length > 0 && (
-        <div className="chips" style={{ marginTop: 8 }}>
-          <button type="button" className={`chip ${value === selMain ? 'on' : ''}`} onClick={() => onChange(selMain!)}>allgemein</button>
-          {subs.map((s) => (
-            <button type="button" key={s.id} className={`chip ${value === s.id ? 'on' : ''}`} onClick={() => onChange(s.id)}>{s.name}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+export { CategoryPicker } from './pickers';
 
 export function Toast({ text, action, onAction, onDone }: { text: string; action?: string; onAction?: () => void; onDone: () => void }) {
   useEffect(() => {

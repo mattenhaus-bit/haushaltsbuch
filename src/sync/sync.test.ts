@@ -264,7 +264,7 @@ describe('Synchronisation zwischen zwei Geräten', () => {
       await on(phone, () => engine().syncOnce());
 
       freeze('2031-06-01T12:00:00.000Z'); // iPhone-Uhr geht eine Stunde vor
-      await on(phone, () => A.updateTx(id, { amount: 2000 }));
+      await on(phone, () => A.updateTx(id, { amount: 2400 }));
       await on(phone, () => engine().syncOnce());
 
       freeze('2031-06-01T11:10:00.000Z'); // PC (richtige Uhr) – sieht die Änderung und ändert danach

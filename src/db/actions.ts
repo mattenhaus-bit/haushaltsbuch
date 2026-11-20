@@ -1,6 +1,6 @@
 import { db, GENESIS, SYNC_TABLES, type Category, type MerchantRule, type Pot, type Recurring, type Transaction } from './schema';
 import { alive, deviceId, newId, nowIso, stamp, stampSync } from './meta';
-import { budgetMonthForIncome, compareMonth, dayInMonth, monthOf, type Day, type Month } from '../lib/dates';
+import { budgetMonthForIncome, compareMonth, currentMonth, dayInMonth, monthOf, type Day, type Month } from '../lib/dates';
 import { isActive, isDue, potRate, potTxId, priceFor, recurringTxId } from '../lib/recurring';
 import type { Cents } from '../lib/money';
 
@@ -299,7 +299,7 @@ export async function mergeImport(json: string): Promise<Record<string, number>>
       if (valid.length) counts[t] = valid.length;
     }
   });
-  await ensureMonth((await import('../lib/dates')).currentMonth());
+  await ensureMonth(currentMonth());
   return counts;
 }
 

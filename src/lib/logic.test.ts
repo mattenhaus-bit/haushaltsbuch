@@ -39,9 +39,9 @@ describe('Datum', () => {
 });
 
 describe('Fixkosten-Vorlagen', () => {
-  const miete = { interval: 'monthly', start: '2030-01', prices: [{ from: '2030-01', amount: 90000 }, { from: '2030-07', amount: 95000 }] } as Recurring;
+  const miete = { interval: 'monthly', start: '2030-01', prices: [{ from: '2030-01', amount: 87300 }, { from: '2030-07', amount: 95000 }] } as Recurring;
   it('Preis-Historie', () => {
-    expect(priceFor(miete, '2030-06')).toBe(90000);
+    expect(priceFor(miete, '2030-06')).toBe(87300);
     expect(priceFor(miete, '2030-07')).toBe(95000);
     expect(priceFor(miete, '2031-01')).toBe(95000);
   });
@@ -67,7 +67,7 @@ describe('Monatsrechnung mit Datenbank (Beispieldaten)', () => {
     await seedIfEmpty();
     await A.setSetting('startMonth', '2030-01');
     // frei erfundene Beispiel-Fixkosten und ein Topf
-    await A.saveRecurring({ id: 'rec-miete', name: 'Miete', categoryId: 'bill-wohnen', interval: 'monthly', dueDay: 1, start: '2030-01', prices: [{ from: '2030-01', amount: 90000 }] });
+    await A.saveRecurring({ id: 'rec-miete', name: 'Miete', categoryId: 'bill-wohnen', interval: 'monthly', dueDay: 1, start: '2030-01', prices: [{ from: '2030-01', amount: 87300 }] });
     await A.saveRecurring({ id: 'rec-handy', name: 'Handyvertrag', categoryId: 'bill-abos', interval: 'monthly', dueDay: 15, start: '2030-01', prices: [{ from: '2030-01', amount: 1500 }] });
     await A.saveRecurring({ id: 'rec-vers', name: 'Versicherung', categoryId: 'bill-versicherung', interval: 'yearly', dueMonths: [3], dueDay: 1, start: '2030-01', prices: [{ from: '2030-01', amount: 12000 }] });
     await A.savePot({ id: 'pot-auto', name: 'Auto', accountId: 'acc-tagesgeld', yearlyAmount: 120000, dueMonths: [5], start: '2030-01' });
@@ -90,7 +90,7 @@ describe('Monatsrechnung mit Datenbank (Beispieldaten)', () => {
     const { db } = await import('../db/schema');
     await A.ensureMonth('2030-02');
     const base = summarizeMonth('2030-02', await db.transactions.toArray(), 'acc-giro');
-    expect(base.bills).toBe(90000 + 1500 + 10000); // Miete + Handy + Topf-Rate (1.200 € / 12)
+    expect(base.bills).toBe(87300 + 1500 + 10000); // Miete + Handy + Topf-Rate (1.200 € / 12)
     expect(base.potRates).toBe(10000);
 
     await A.addIncome({ amount: 250000, categoryId: 'inc-gehalt', date: '2030-01-28' }); // zählt für Februar
@@ -104,7 +104,7 @@ describe('Monatsrechnung mit Datenbank (Beispieldaten)', () => {
     expect(s.expenses).toBe(4500 + 6000 + 5000);
     expect(s.potFunded).toBe(30000);
     expect(s.savedOrInvested).toBe(20000);
-    expect(s.available).toBe(250000 - 101500 - 15500 - 20000);
+    expect(s.available).toBe(250000 - 98800 - 15500 - 20000);
     expect(s.byCategory.get('exp-lebensmittel-supermarkt')).toBe(10500);
     expect(s.byCategory.get('exp-mobilitaet-tanken')).toBe(5000);
     const pot = (await db.pots.get('pot-auto'))!;
@@ -122,13 +122,30 @@ describe('Monatsrechnung mit Datenbank (Beispieldaten)', () => {
     expect(s.available).toBe(0 - s.bills);
   });
 
+  it('Topf beenden bzw. löschen: keine neuen Raten, bezahlte Raten bleiben', async () => {
+    await A.ensureMonth('2030-03');
+    await A.ensureMonth('2030-04');
+    const { db } = await import('../db/schema');
+    const rate = (m: string) => db.transactions.get(`pot:pot-auto:${m}`);
+    await A.togglePaid(`pot:pot-auto:2030-03`);
+    const pot = (await db.pots.get('pot-auto'))!;
+    await A.savePot({ ...pot, archived: 1 });
+    expect((await rate('2030-03'))!.deleted).toBe(0);        // bezahlte Rate bleibt
+    expect((await rate('2030-04'))!.deleted).toBe(1);        // offene Rate entfällt
+    await A.ensureMonth('2030-05');
+    expect(await rate('2030-05')).toBeUndefined();           // keine neue Rate
+    await A.savePot({ ...pot, archived: 0, deleted: 1 });
+    expect((await db.pots.get('pot-auto'))!.deleted).toBe(1);
+    expect((await rate('2030-03'))!.deleted).toBe(0);
+  });
+
   it('Preisänderung passt nur offene Monate an', async () => {
     const { db } = await import('../db/schema');
     await A.ensureMonth('2030-02');
     await A.ensureMonth('2030-03');
     await A.togglePaid('rec:rec-miete:2030-02');
     await A.changePrice('rec-miete', '2030-02', 95000);
-    expect((await db.transactions.get('rec:rec-miete:2030-02'))!.amount).toBe(90000); // schon bezahlt
+    expect((await db.transactions.get('rec:rec-miete:2030-02'))!.amount).toBe(87300); // schon bezahlt
     expect((await db.transactions.get('rec:rec-miete:2030-03'))!.amount).toBe(95000);
   });
 

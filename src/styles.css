@@ -311,3 +311,42 @@ table.matrix { border-collapse: separate; border-spacing: 0; width: max-content;
 /* Datei-Knöpfe sind <label>-Elemente: als Block-Knopf darstellen (sonst überlappen sie) */
 label.btn { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
 .btn.block { display: flex; align-items: center; justify-content: center; }
+
+/* Vorschläge & Kategorieauswahl */
+.suggest { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-ctl); background: var(--surface); overflow: hidden; }
+.sugg { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px 13px; min-height: 44px; border: 0; border-top: 1px solid var(--line); background: transparent; font-size: 15px; color: var(--text); }
+.sugg:first-child { border-top: 0; }
+.sugg:hover, .sugg:focus-visible { background: var(--surface-2, rgba(127,127,127,.08)); }
+.sugg .ic, .catsel .ic { width: 22px; text-align: center; flex: none; }
+.sugg .small { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.catsel { display: flex; align-items: center; gap: 8px; padding: 9px 12px; margin-bottom: 8px; border-radius: var(--r-ctl); background: var(--ink); color: #fff; font-weight: 700; }
+.cattree { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.cgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.cgroup:last-child { border-bottom: 0; padding-bottom: 0; }
+.chip.main { font-weight: 800; flex: 1 1 100%; justify-content: flex-start; }
+.chip.sub { font-weight: 500; padding: 6px 11px; font-size: 13.5px; }
+.tripCat { font-size: 12.5px; color: var(--text-2); margin: -4px 0 8px 4px; }
+.tripCat button { border: 0; background: none; color: var(--accent); font-weight: 700; padding: 2px 4px; font-size: 12.5px; }
+
+/* Topf: Beenden / Löschen */
+.dangerzone { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+.dangerzone h3 { font-size: 15px; margin: 0 0 8px; }
+.dangerzone .small { margin: 6px 2px 0; }
+
+/* Kennzahl-Details */
+.tile.click { cursor: pointer; position: relative; }
+.tile.click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tile.click .k::after { content: '›'; margin-left: auto; color: var(--muted); font-size: 16px; line-height: 1; }
+.kpihead { margin-bottom: 14px; }
+.kpihead .big { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+.kpicmp { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 6px; font-size: 14px; color: var(--text-2); }
+.card.flat { box-shadow: none; margin-bottom: 12px; padding: 14px; }
+.card.flat h3 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.card.flat h3 small { font-weight: 500; font-size: 13px; color: var(--muted); }
+.kpigrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kpigrid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kpigrid b { font-size: 17px; }
+.pot.click { cursor: pointer; }
+.sugg .stack2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sugg .stack2 .small { max-width: none; }
+.sugg .grow { flex: 1; min-width: 0; }

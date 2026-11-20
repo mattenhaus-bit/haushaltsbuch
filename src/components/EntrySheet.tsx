@@ -5,6 +5,8 @@ import { addMonths, budgetMonthForIncome, monthLabel, today } from '../lib/dates
 import { centsToInput, euro, parseEuro } from '../lib/money';
 import { topCategories, type AppData } from '../data';
 import { CategoryPicker, Field, Sheet } from './ui';
+import { SuggestList } from './pickers';
+import { buildHistory, catPath, categoryForText, suggestTexts, type HistoryItem } from '../lib/suggest';
 
 export type EntryMode = 'expense' | 'trip' | 'income' | 'transfer';
 
@@ -65,17 +67,25 @@ function ExpenseForm({ d, edit, onDone }: { d: AppData; edit?: Transaction; onDo
   const [date, setDate] = useState(edit?.date ?? today());
   const [potId, setPotId] = useState(edit?.potId ?? '');
   const [catTouched, setCatTouched] = useState(!!edit);
-  const top = useMemo(() => topCategories(d, 'expense', 6), [d]);
+  const top = useMemo(() => topCategories(d, 'expense', 8), [d]);
+  const history = useMemo(() => buildHistory(d.txs, 'expense'), [d.txs]);
+  const [textFocus, setTextFocus] = useState(false);
+  const textHits = useMemo(() => (textFocus ? suggestTexts(text, history, d.merchants, 5) : []), [textFocus, text, history, d.merchants]);
   const isBill = edit?.kind === 'bill';
   const cents = parseEuro(amount);
 
-  // Händlererkennung aus dem Text
+  // Kategorie aus der Beschreibung ableiten (eigene frühere Buchungen, dann Läden-Regeln)
   useEffect(() => {
     if (catTouched || !text) return;
-    const t = text.toLowerCase();
-    const rule = [...d.merchants].sort((a, b) => b.pattern.length - a.pattern.length).find((r) => t.includes(r.pattern));
-    if (rule) setCat(rule.categoryId);
-  }, [text, catTouched, d.merchants]);
+    const c = categoryForText(text, history, d.merchants);
+    if (c) setCat(c);
+  }, [text, catTouched, d.merchants, history]);
+
+  const pickText = (h: HistoryItem) => {
+    setText(h.text);
+    if (!catTouched && h.categoryId) setCat(h.categoryId);
+    if (!amount && h.amount) setAmount(centsToInput(h.amount));
+  };
 
   const save = async () => {
     if (cents === null || cents === 0) return;
@@ -92,12 +102,24 @@ function ExpenseForm({ d, edit, onDone }: { d: AppData; edit?: Transaction; onDo
       <AmountField value={amount} onChange={setAmount} autoFocus={!edit} />
       {!isBill && (
         <Field label="Kategorie">
-          <CategoryPicker d={d} group="expense" value={cat} top={top} onChange={(c) => { setCat(c); setCatTouched(true); }} />
+          <CategoryPicker d={d} group="expense" value={cat} top={top} history={history} onChange={(c) => { setCat(c); setCatTouched(true); }} />
         </Field>
       )}
-      <Field label={isBill ? 'Bezeichnung' : 'Beschreibung / Laden (optional)'}>
-        <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder="z. B. Lidl, Geschenk …" />
-      </Field>
+      <div className="field">
+        <label htmlFor="exp-text">{isBill ? 'Bezeichnung' : 'Beschreibung / Laden (optional)'}</label>
+        <input id="exp-text" className="input" value={text} autoComplete="off" onChange={(e) => setText(e.target.value)}
+          onFocus={() => setTextFocus(true)} onBlur={() => setTextFocus(false)} placeholder="z. B. Lidl, Geschenk …" />
+        {!isBill && (
+          <SuggestList label="Frühere Eingaben" items={textHits} onPick={pickText} render={(h) => (
+            <>
+              <span className="stack2">
+                <span>{h.text}</span>
+                <span className="small muted">{h.categoryId ? catPath(d.catById.get(h.categoryId), d.catById) : ''}{h.amount && h.count ? ` · zuletzt ${euro(h.amount)}` : ''}</span>
+              </span>
+            </>
+          )} />
+        )}
+      </div>
       <div className="flex">
         <div className="grow"><Field label="Datum"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field></div>
         {!isBill && d.pots.length > 0 && (
@@ -123,6 +145,10 @@ function TripForm({ d, onDone }: { d: AppData; onDone: (m: string) => void }) {
   const [date, setDate] = useState(today());
   const [rows, setRows] = useState<TripRow[]>([{ merchant: '', amount: '' }]);
   const quick = d.merchants.filter((m) => m.quick);
+  const history = useMemo(() => buildHistory(d.txs, 'expense'), [d.txs]);
+  const [focusRow, setFocusRow] = useState<number | null>(null);
+  const [catRow, setCatRow] = useState<number | null>(null);
+  const catOf = (r: TripRow) => r.categoryId ?? (r.merchant.trim() ? categoryForText(r.merchant, history, d.merchants) : undefined);
   const set = (i: number, patch: Partial<TripRow>) => setRows(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   const total = rows.reduce((s, r) => s + (parseEuro(r.amount) ?? 0), 0);
   const valid = rows.filter((r) => r.merchant.trim() && (parseEuro(r.amount) ?? 0) !== 0);
@@ -142,7 +168,7 @@ function TripForm({ d, onDone }: { d: AppData; onDone: (m: string) => void }) {
   };
   const save = async () => {
     if (!valid.length) return;
-    await A.addTrip(date, valid.map((r) => ({ merchant: r.merchant.trim(), amount: parseEuro(r.amount)!, categoryId: r.categoryId })));
+    await A.addTrip(date, valid.map((r) => ({ merchant: r.merchant.trim(), amount: parseEuro(r.amount)!, categoryId: catOf(r) })));
     onDone(`Einkauf ${euro(total)} gespeichert`);
   };
   return (
@@ -154,20 +180,47 @@ function TripForm({ d, onDone }: { d: AppData; onDone: (m: string) => void }) {
       </Field>
       <div className="field">
         <label>Läden & Beträge</label>
-        {rows.map((r, i) => (
-          <div className="tripRow" key={i}>
-            <input className="input" placeholder="Laden" value={r.merchant} onChange={(e) => set(i, { merchant: e.target.value })} />
-            <input ref={(el) => { amountRefs.current[i] = el; }} className="input num" inputMode="decimal" placeholder="0,00" value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} />
-            <button type="button" className="xbtn" aria-label="Zeile entfernen" onClick={() => setRows(rows.length > 1 ? rows.filter((_, k) => k !== i) : [{ merchant: '', amount: '' }])}>✕</button>
-          </div>
-        ))}
+        {rows.map((r, i) => {
+          const c = catOf(r);
+          const hits = focusRow === i ? suggestTexts(r.merchant, history, d.merchants, 5) : [];
+          return (
+            <div key={i}>
+              <div className="tripRow">
+                <input className="input" placeholder="Laden" aria-label={`Laden ${i + 1}`} autoComplete="off" value={r.merchant}
+                  onFocus={() => setFocusRow(i)} onBlur={() => setFocusRow(null)}
+                  onChange={(e) => set(i, { merchant: e.target.value, categoryId: undefined })} />
+                <input ref={(el) => { amountRefs.current[i] = el; }} className="input num" inputMode="decimal" placeholder="0,00" aria-label={`Betrag ${i + 1}`} value={r.amount} onChange={(e) => set(i, { amount: e.target.value })} />
+                <button type="button" className="xbtn" aria-label="Zeile entfernen" onClick={() => setRows(rows.length > 1 ? rows.filter((_, k) => k !== i) : [{ merchant: '', amount: '' }])}>✕</button>
+              </div>
+              <SuggestList label="Läden" items={hits} onPick={(h) => { set(i, { merchant: h.text, categoryId: undefined }); setFocusIdx(i); }} render={(h) => (
+                <>
+                  <span className="stack2">
+                    <span>{h.text}</span>
+                    <span className="small muted">{h.categoryId ? catPath(d.catById.get(h.categoryId), d.catById) : ''}</span>
+                  </span>
+                </>
+              )} />
+              {r.merchant.trim() && (
+                <div className="tripCat">
+                  → {c ? catPath(d.catById.get(c), d.catById) : 'Sonstiges'}
+                  <button type="button" onClick={() => setCatRow(catRow === i ? null : i)}>{catRow === i ? 'fertig' : 'ändern'}</button>
+                </div>
+              )}
+              {catRow === i && (
+                <div style={{ marginBottom: 10 }}>
+                  <CategoryPicker d={d} group="expense" value={c} history={history} onChange={(id) => { set(i, { categoryId: id }); setCatRow(null); }} />
+                </div>
+              )}
+            </div>
+          );
+        })}
         <button type="button" className="btn sm" onClick={() => setRows([...rows, { merchant: '', amount: '' }])}>+ weiterer Laden</button>
       </div>
       <Field label="Datum"><input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
       <div className="flex" style={{ justifyContent: 'space-between', margin: '4px 2px 12px' }}>
         <span className="muted">Summe</span><strong className="num">{euro(total)}</strong>
       </div>
-      <p className="small muted" style={{ marginTop: -6 }}>Kategorie wird am Laden erkannt (z. B. Lidl → Lebensmittel). Unbekannte Läden landen unter „Sonstiges“ und lassen sich danach ändern.</p>
+      <p className="small muted" style={{ marginTop: -6 }}>Die Kategorie wird am Laden erkannt – auch an deinen früheren Einkäufen. Mit „ändern“ lässt sie sich je Laden anpassen.</p>
       <button className="btn primary block" disabled={!valid.length}>Einkauf speichern</button>
     </form>
   );

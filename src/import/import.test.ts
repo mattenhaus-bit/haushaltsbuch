@@ -35,12 +35,12 @@ function makeXlsx(sheets: { name: string; cells: Cells; merges?: string[] }[]) {
   return zipSync(files);
 }
 
-// Beispiel-Monat (Januar 2030): Einkommen 3.000, Miete 900 (abgehakt), Abo 20 (nicht abgehakt),
-// Ausgaben Lebensmittel 150 + Tanken 50, Rate 30, Tagesgeld 1.000
+// Beispiel-Monat (Januar 2030): Einkommen 3.000, Miete 873 (abgehakt), Abo 20 (nicht abgehakt),
+// Ausgaben Lebensmittel 160 + Tanken 50, Rate 30, Tagesgeld 1.000
 const jan: Cells = {
   C21: 'Arbeitseinkommen', D21: 47119 /* 01.01.2029 */, H21: 3000,
-  J13: true, K13: 'Miete', P13: 900, J14: false, K14: 'Streaming', P14: 20,
-  S13: 'Lebensmittel', W13: 150, S14: 'Tanken', W14: 50,
+  J13: true, K13: 'Miete', P13: 873, J14: false, K14: 'Streaming', P14: 20,
+  S13: 'Lebensmittel', W13: 160, S14: 'Tanken', W14: 50,
   Z13: 'Handyrate', AE13: 30,
   Z30: 'Tagesgeld', AE30: 1000
 };
@@ -75,14 +75,14 @@ describe('Excel-Import', () => {
     expect(r.months).toHaveLength(1);
     const m = r.months[0];
     expect(m.ok).toBe(true);
-    expect(m.excel).toEqual({ income: 300000, bills: 90000, expenses: 20000, debts: 3000, savings: 100000, balance: 300000 - 90000 - 20000 - 3000 - 100000 });
+    expect(m.excel).toEqual({ income: 300000, bills: 87300, expenses: 21000, debts: 3000, savings: 100000, balance: 300000 - 87300 - 21000 - 3000 - 100000 });
     expect(r.stats.unpaidBills).toBe(1); // nicht abgehakt → wie in Excel nicht gezählt
     // Einkaufstour (verbundenes Datum) erkannt
     const trip = r.txs.filter((t) => t.tripId);
     expect(trip.map((t) => t.amount)).toEqual([6000, 7000]);
-    // Lebensmittel laut Excel 150, Einzelkäufe 130 → Abgleich +20; Tanken 50 = 50; „markt“ 9,50 unbekannt → Sonstiges, Abgleich −9,50
+    // Lebensmittel laut Excel 160, Einzelkäufe 130 → Abgleich +30; Tanken 50 = 50; „markt“ 9,50 unbekannt → Sonstiges, Abgleich −9,50
     const corr = r.txs.filter((t) => t.text === 'Abgleich mit Excel-Monatsblatt');
-    expect(corr.find((t) => t.categoryId === 'exp-lebensmittel')!.amount).toBe(2000);
+    expect(corr.find((t) => t.categoryId === 'exp-lebensmittel')!.amount).toBe(3000);
     expect(corr.find((t) => t.categoryId === 'exp-sonstiges')!.amount).toBe(-950);
   });
 
@@ -97,8 +97,8 @@ describe('Excel-Import', () => {
     await applyImport(r, 'Finanzen 2030.xlsx');
     const s = summarizeMonth('2030-01', await db.transactions.toArray(), 'acc-giro');
     expect(s.income).toBe(300000);
-    expect(s.expenses).toBe(20000);
-    expect(s.bills).toBe(93000);
+    expect(s.expenses).toBe(21000);
+    expect(s.bills).toBe(90300); // Miete 873 € + Rate 30 €
     expect(s.savedOrInvested).toBe(100000);
     expect(s.available).toBe(r.months[0].excel.balance);
     const count1 = (await db.transactions.toArray()).filter((t) => !t.deleted).length;
